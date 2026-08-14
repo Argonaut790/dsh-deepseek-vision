@@ -1,0 +1,10 @@
+- insert:
+    # Owns the global vision route and makes this package's Web client visible.
+    - id: deepseek-vision-settings
+      name: dsh-deepseek-vision
+
+    # Delegates selected images to a conversation-scoped isolated analyst.
+    - id: deepseek-vision-tool
+      name: dsh-deepseek-vision/tool
+      config:
+        provider: spawn
