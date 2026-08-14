@@ -1,10 +1,11 @@
-# dsh-deepseek-vision
+# DSH DeepSeek Vision
 
 [![CI](https://github.com/Argonaut790/dsh-deepseek-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/Argonaut790/dsh-deepseek-vision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A DSH-native visual evidence workspace that gives text-only DeepSeek Harness
-models controlled access to images without changing the parent model.
+**DSH DeepSeek Vision** is an open-source DeepSeek Harness (DSH) vision plugin
+that adds image understanding, full-screen OCR, and persistent visual evidence
+to text-only DeepSeek models without replacing the parent model.
 
 Unlike provider-pool or CLI interception tools, this plugin keeps DeepSeek
 Harness in charge of models, attachments, sessions, and UI. It adds:
@@ -15,6 +16,29 @@ Harness in charge of models, attachments, sessions, and UI. It adds:
 - a read-only **Evidence** tab and per-call evidence cards
 - a global `Vision: …` provider/model picker beside **Choose Model**
 - live route changes; changing the route starts a new analyst
+
+## Screenshots
+
+### Vision-enabled DeepSeek Harness composer
+
+![DeepSeek Harness composer using Grok 4.6 as the vision model and DeepSeek V4 Pro High as the parent model](docs/images/dsh-vision-composer.png)
+
+The parent DeepSeek model stays in control while the separate **Vision** route
+handles image understanding and OCR.
+
+### Compact vision model selector
+
+![Compact DSH Vision model selector beside the DeepSeek parent model selector](docs/images/dsh-vision-model-selector.png)
+
+The global selector makes the active image-capable model visible and lets users
+change the visual-analysis route without changing the conversation model.
+
+<details>
+<summary>GitHub project overview</summary>
+
+![The open-source DSH DeepSeek Vision repository on GitHub](docs/images/dsh-deepseek-vision-github.png)
+
+</details>
 
 ## Requirements
 

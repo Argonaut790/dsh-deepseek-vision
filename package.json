@@ -1,7 +1,7 @@
 {
   "name": "dsh-deepseek-vision",
   "version": "0.1.0",
-  "description": "A DSH-native visual evidence workspace for text-only DeepSeek Harness models",
+  "description": "Image understanding, OCR, and persistent visual evidence for text-only DeepSeek Harness models",
   "license": "MIT",
   "author": "Argonaut790",
   "repository": {
@@ -23,6 +23,11 @@
     "deepseek-harness",
     "deepseek",
     "vision",
+    "computer-vision",
+    "image-understanding",
+    "multimodal-ai",
+    "vision-language-model",
+    "visual-evidence",
     "ocr",
     "subagent"
   ],
