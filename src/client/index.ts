@@ -8,12 +8,14 @@
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import { EvidenceView, SeeImageEvidenceCard } from './EvidenceWorkspace.tsx'
 import { VisionModelSelect } from './VisionModelSelect.tsx'
+import { visionUserMessageView } from './VisionUserMessage.tsx'
 import type { EvidenceImageInjected, VisionModelSelectInjected } from './slots.ts'
 import { en, zh, type VisionKey } from './locales.ts'
 import { installStyles } from './styles.ts'
@@ -80,6 +82,33 @@ export function apply(ctx: ClientContext): void {
       () => installVisionSendHook(scope.get('conversation')),
       'dsh-deepseek-vision: image send hook',
     )
+    scope.slots.inject('conversation.chat.node', () => {
+      let activeStock: unknown
+      let disposeProjection: (() => void) | undefined
+      const syncProjection = () => {
+        const stock = scope.slots.entries('conversation.chat.node')
+          .find(entry => entry.options.key === 'user' && (entry.options.priority ?? 0) === 0)
+          ?.component as ((props: ChatNodeViewProps<'user'>) => ReactNode) | undefined
+        if (stock === activeStock) return
+        disposeProjection?.()
+        disposeProjection = undefined
+        activeStock = stock
+        if (stock !== undefined) {
+          disposeProjection = scope.slots.register({
+            name: 'conversation.chat.node',
+            key: 'user',
+            priority: -100,
+            locale: 'conversation',
+          }, visionUserMessageView(stock))
+        }
+      }
+      syncProjection()
+      const unsubscribe = scope.slots.subscribe('conversation.chat.node', syncProjection)
+      return () => {
+        unsubscribe()
+        disposeProjection?.()
+      }
+    })
     const evidenceInject = (sessionId: SessionId): EvidenceImageInjected => ({
       loadImage: (attachment: ImageAttachmentRef) => Promise.resolve(
         visionMediaRawPath(String(sessionId), String(attachment.attachmentId)),

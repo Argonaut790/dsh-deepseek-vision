@@ -345,14 +345,18 @@ export function parseVisionReadbackValue(value: unknown): VisionReadback {
 }
 
 /**
- * Strictly parse a continuable analyst's final output. Markdown fences,
- * prose, and non-text blocks are rejected rather than heuristically stripped.
+ * Strictly parse a continuable analyst's final output. Provider reasoning is
+ * ignored, while Markdown fences, prose, and every other block are rejected.
  */
 export function parseVisionReadbackOutput(output: readonly ContentBlock[]): VisionReadback {
-  if (output.length === 0 || output.some(block => block.type !== 'text')) {
-    throw new Error('vision analyst must return exactly JSON text with no non-text blocks')
+  const textBlocks = output.filter(
+    (block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text',
+  )
+  if (textBlocks.length === 0
+    || output.some(block => block.type !== 'text' && block.type !== 'reasoning')) {
+    throw new Error('vision analyst must return JSON text; only reasoning blocks may accompany it')
   }
-  const text = output.map(block => (block as Extract<ContentBlock, { type: 'text' }>).text).join('')
+  const text = textBlocks.map(block => block.text).join('')
   let value: unknown
   try {
     value = JSON.parse(text)

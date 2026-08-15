@@ -20,6 +20,7 @@ interface Registration {
     key?: string
     id?: string
     order?: number
+    priority?: number
     locale?: string
     label?: () => string
     inject?: (sessionId: SessionId) => unknown
@@ -27,7 +28,7 @@ interface Registration {
   component: unknown
 }
 
-function context() {
+function context(stockInitiallyAvailable = true) {
   const registrations: Registration[] = []
   const connection = {
     api: {
@@ -48,8 +49,19 @@ function context() {
     },
   }
   const remote = { $on: vi.fn(() => () => {}) }
+  const stockUserMessage = () => null
+  const slotEntries = stockInitiallyAvailable ? [{
+    options: { key: 'user', priority: 0 },
+    component: stockUserMessage,
+  }] : []
+  const slotListeners: Array<() => void> = []
   const slots = {
     inject: vi.fn((_name: string, register: () => unknown) => register()),
+    entries: vi.fn(() => slotEntries),
+    subscribe: vi.fn((_name: string, listener: () => void) => {
+      slotListeners.push(listener)
+      return () => {}
+    }),
     register: vi.fn((options: Registration['options'], component: unknown) => {
       registrations.push({ options, component })
       return () => {}
@@ -69,7 +81,17 @@ function context() {
     get: (key: string) => key === 'connection' ? connection : {},
     on: vi.fn(() => () => {}),
   } as unknown as ClientContext
-  return { ctx, registrations }
+  return {
+    ctx,
+    registrations,
+    makeStockUserMessageAvailable: () => {
+      slotEntries.push({
+        options: { key: 'user', priority: 0 },
+        component: stockUserMessage,
+      })
+      for (const listener of slotListeners) listener()
+    },
+  }
 }
 
 describe('client slot registration', () => {
@@ -120,5 +142,24 @@ describe('client slot registration', () => {
     }
     await expect(injected.loadImage(attachment))
       .resolves.toBe('/dsh-deepseek-vision/media/raw/session-1/image-1')
+  })
+
+  it('waits for the stock user renderer before installing its projection', () => {
+    const b = context(false)
+    apply(b.ctx)
+    expect(b.registrations.some(entry =>
+      entry.options.name === 'conversation.chat.node')).toBe(false)
+
+    b.makeStockUserMessageAvailable()
+
+    expect(b.registrations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        options: expect.objectContaining({
+          name: 'conversation.chat.node',
+          key: 'user',
+          priority: -100,
+        }),
+      }),
+    ]))
   })
 })

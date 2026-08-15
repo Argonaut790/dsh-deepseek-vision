@@ -108,6 +108,10 @@ describe('see_image tool contract', () => {
       uncertainties: [],
     }
     expect(parseVisionReadbackOutput([{ type: 'text', text: JSON.stringify(value) }])).toEqual(value)
+    expect(parseVisionReadbackOutput([
+      { type: 'reasoning', text: 'I should return the requested schema.' },
+      { type: 'text', text: JSON.stringify(value) },
+    ])).toEqual(value)
     expect(() => parseVisionReadbackOutput([{
       type: 'text',
       text: `\`\`\`json\n${JSON.stringify(value)}\n\`\`\``,

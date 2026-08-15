@@ -1,5 +1,6 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { VISION_MEDIA_ATTACH_PATH, visionMediaRawPath } from '../shared.ts'
+import { VISION_MEDIA_ATTACH_PATH } from '../shared.ts'
+import { imageAttachmentNote } from '../media.ts'
 
 interface DraftImageFace {
   readonly id: string
@@ -101,13 +102,6 @@ async function uploadImages(sessionId: string, images: readonly DraftImageFace[]
   return attachments.map(canonicalAttachmentRef)
 }
 
-function imageText(sessionId: string, ref: ImageAttachmentRef): string {
-  const name = (ref.name ?? 'image').replace(/[\[\]]/g, '_')
-  const rawUrl = new URL(visionMediaRawPath(sessionId, String(ref.attachmentId)), window.location.origin)
-  const markdown = `![${name}](${rawUrl.href})`
-  return `${markdown}\n[image attachment ${JSON.stringify(ref)}]`
-}
-
 /**
  * Rewrite image-bearing composer submissions into one text-only prompt whose
  * full durable refs can be replayed by `see_image`.
@@ -129,7 +123,7 @@ export function installVisionSendHook(conversation: unknown): () => void {
       throw new Error('Image upload failed: one or more draft images are no longer available')
     }
     const refs = await uploadImages(session.sessionId, drafts)
-    const fullText = [text.trim(), ...refs.map(ref => imageText(session.sessionId, ref))]
+    const fullText = [text.trim(), ...refs.map(imageAttachmentNote)]
       .filter(value => value.length > 0)
       .join('\n\n')
     const result = await session.prompt([{ type: 'text', text: fullText }], mode)

@@ -48,9 +48,8 @@ describe('vision composer send hook', () => {
     expect(content).toHaveLength(1)
     expect(content?.[0]).toMatchObject({ type: 'text' })
     expect(content?.[0]?.text).toContain('What is shown?')
-    expect(content?.[0]?.text).toContain(`${window.location.origin}/dsh-deepseek-vision/media/raw/`)
-    expect(content?.[0]?.text).toContain('/dsh-deepseek-vision/media/raw/session-one/')
     expect(content?.[0]?.text).toContain('[image attachment {"attachmentId":"sha256:')
+    expect(content?.[0]?.text).not.toContain('/dsh-deepseek-vision/media/raw/')
     expect(content?.[0]?.text).not.toContain('serverInternal')
     expect(releaseDraftImage).toHaveBeenCalledWith('draft-one')
 
