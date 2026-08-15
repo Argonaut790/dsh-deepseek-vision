@@ -21,43 +21,83 @@ function image(attachmentId: string) {
   }
 }
 
+const ids = {
+  old: `sha256:${'0'.repeat(64)}`,
+  newOne: `sha256:${'1'.repeat(64)}`,
+  newTwo: `sha256:${'2'.repeat(64)}`,
+  one: `sha256:${'3'.repeat(64)}`,
+  two: `sha256:${'4'.repeat(64)}`,
+}
+
 describe('see_image tool contract', () => {
   it('uses delegated images from the newest matching event', () => {
     expect(latestDelegatedImages([
       {
+        type: 'user/message',
         data: {
-          content: [{ type: 'delegated-image', attachment: image('old') }],
+          content: [{ type: 'delegated-image', attachment: image(ids.old) }],
         },
       },
       { data: { content: [{ type: 'text', text: 'later text' }] } },
       {
+        type: 'user/message',
         data: {
           content: [
-            { type: 'delegated-image', attachment: image('new-one') },
-            { type: 'delegated-image', attachment: image('new-two') },
+            { type: 'delegated-image', attachment: image(ids.newOne) },
+            { type: 'delegated-image', attachment: image(ids.newTwo) },
           ],
         },
       },
-    ])).toEqual([image('new-one'), image('new-two')])
+    ])).toEqual([image(ids.newOne), image(ids.newTwo)])
   })
 
   it('selects latest, all unique, and explicit delegated images', () => {
     const events = [
-      { data: { content: [{ type: 'delegated-image', attachment: image('one') }] } },
       {
+        type: 'user/message',
+        data: { content: [{ type: 'delegated-image', attachment: image(ids.one) }] },
+      },
+      {
+        type: 'user/message',
         data: {
           content: [
-            { type: 'delegated-image', attachment: image('one') },
-            { type: 'delegated-image', attachment: image('two') },
+            { type: 'delegated-image', attachment: image(ids.one) },
+            { type: 'delegated-image', attachment: image(ids.two) },
           ],
         },
       },
     ]
-    expect(allDelegatedImages(events)).toEqual([image('one'), image('two')])
-    expect(selectDelegatedImages(events, { mode: 'latest' })).toEqual([image('one'), image('two')])
-    expect(selectDelegatedImages(events, { mode: 'ids', ids: ['two'] })).toEqual([image('two')])
+    expect(allDelegatedImages(events)).toEqual([image(ids.one), image(ids.two)])
+    expect(selectDelegatedImages(events, { mode: 'latest' })).toEqual([image(ids.one), image(ids.two)])
+    expect(selectDelegatedImages(events, { mode: 'ids', ids: [ids.two] })).toEqual([image(ids.two)])
     expect(() => selectDelegatedImages(events, { mode: 'ids', ids: ['missing'] }))
       .toThrow(/missing/)
+  })
+
+  it('accepts strict attachment notes only from user-message text', () => {
+    const noted = image(`sha256:${'a'.repeat(64)}`)
+    const note = `[image attachment ${JSON.stringify(noted)}]`
+    expect(allDelegatedImages([
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: note }] } },
+      { type: 'user/message', data: { content: [{ type: 'text', text: note }] } },
+    ])).toEqual([noted])
+    expect(allDelegatedImages([
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: note }] } },
+    ])).toEqual([])
+  })
+
+  it('accepts validated native image blocks only from user messages', () => {
+    const native = image(`sha256:${'b'.repeat(64)}`)
+    expect(allDelegatedImages([
+      { type: 'assistant/message', data: { content: [{ type: 'image', attachment: native }] } },
+      { type: 'user/message', data: { content: [{ type: 'image', attachment: native }] } },
+    ])).toEqual([native])
+    expect(allDelegatedImages([
+      {
+        type: 'user/message',
+        data: { content: [{ type: 'image', attachment: { ...native, extra: true } }] },
+      },
+    ])).toEqual([])
   })
 
   it('strictly parses analyst JSON and rejects wrapped or extra fields', () => {

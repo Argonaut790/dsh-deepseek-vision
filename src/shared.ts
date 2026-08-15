@@ -1,5 +1,7 @@
 /** Default output budget for one delegated image readback. */
 export const DEFAULT_SEE_IMAGE_MAX_TOKENS = 8192
+export const DEFAULT_SEE_IMAGE_PROVIDER = 'openrouter'
+export const DEFAULT_SEE_IMAGE_MODEL = '~x-ai/grok-latest'
 
 /** Upper output budget accepted from settings or static configuration. */
 export const MAX_SEE_IMAGE_MAX_TOKENS = 32768
@@ -15,6 +17,15 @@ export const MAX_SEE_IMAGE_TOTAL_QUESTION_CHARS = 8000
 
 /** Stable settings namespace recognized by the DeepSeek Harness Host proxy. */
 export const SEE_IMAGE_MODEL_SETTINGS_NAME = 'see-image-model'
+export const VISION_SELECTION_PATH = '/dsh-deepseek-vision/selection'
+export const VISION_MEDIA_ATTACH_PATH = '/dsh-deepseek-vision/media/attach'
+export const VISION_MEDIA_RAW_ROUTE = '/dsh-deepseek-vision/media/raw'
+export const VISION_MEDIA_RAW_PREFIX = `${VISION_MEDIA_RAW_ROUTE}/`
+
+/** Same-origin URL for one session-authorized stored image. */
+export function visionMediaRawPath(sessionId: string, attachmentId: string): string {
+  return `${VISION_MEDIA_RAW_PREFIX}${encodeURIComponent(sessionId)}/${encodeURIComponent(attachmentId)}`
+}
 
 /** Durable evidence shape version. */
 export const VISION_EVIDENCE_VERSION = 1
@@ -32,7 +43,7 @@ export interface SeeImageModelSelection {
   maxTokens: number
 }
 
-/** Stored settings; provider and model remain absent until the user selects a route. */
+/** Stored settings layered over the default Grok route. */
 export interface SeeImageModelSettings {
   /** Registered LLM provider route. */
   provider?: string

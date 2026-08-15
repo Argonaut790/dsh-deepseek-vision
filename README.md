@@ -21,7 +21,7 @@ Harness in charge of models, attachments, sessions, and UI. It adds:
 
 ### Vision-enabled DeepSeek Harness composer
 
-![DeepSeek Harness composer using Grok 4.6 as the vision model and DeepSeek V4 Pro High as the parent model](docs/images/dsh-vision-composer.png)
+![DeepSeek Harness composer using Grok Latest as the vision model and DeepSeek V4 Pro High as the parent model](docs/images/dsh-vision-composer.png)
 
 The parent DeepSeek model stays in control while the separate **Vision** route
 handles image understanding and OCR.
@@ -82,8 +82,8 @@ For a headless profile, configure the same global route in
 
 ```yaml
 see-image-model:
-  provider: openrouter-grok
-  model: x-ai/grok-4.6
+  provider: openrouter
+  model: '~x-ai/grok-latest'
   maxTokens: 8192
 ```
 
@@ -98,8 +98,8 @@ An optional static fallback may be set on the tool row:
   config:
     provider: spawn
     agentOptions:
-      provider: openrouter-grok
-      model: x-ai/grok-4.6
+      provider: openrouter
+      model: '~x-ai/grok-latest'
       maxTokens: 8192
 ```
 

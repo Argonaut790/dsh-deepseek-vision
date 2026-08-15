@@ -55,11 +55,13 @@ describe('VisionModelSelect', () => {
       directory.set(state({ current: selection, revision: 2 }))
       return true
     })
-    render(<VisionModelSelect directory={directory} load={vi.fn()} select={select} t={t} />)
+    const load = vi.fn()
+    render(<VisionModelSelect directory={directory} load={load} select={select} t={t} />)
 
     const trigger = screen.getByRole('button', { name: 'Select vision model, current Vision One' })
     expect(trigger.textContent).toBe('Vision: Vision One')
     fireEvent.click(trigger)
+    expect(load).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('menu', { name: 'Vision model' })).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Vision Two' }))
 
@@ -79,5 +81,30 @@ describe('VisionModelSelect', () => {
     />)
     expect(screen.queryByRole('button')).toBeNull()
     expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('searches models and filters them by provider', () => {
+    const groups = [
+      ...state().groups,
+      { id: 'other', name: 'Other', models: [{ id: 'text-model', name: 'Text Model' }] },
+    ]
+    render(<VisionModelSelect
+      directory={createSnapshotStore(state({ groups }))}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select vision model, current Vision One' }))
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search vision models' }), {
+      target: { value: 'text' },
+    })
+    expect(screen.getByRole('menuitemradio', { name: 'Text Model' })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: 'Vision One' })).toBeNull()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by provider' }), {
+      target: { value: 'openrouter' },
+    })
+    expect(screen.getByText('No models match the current filters.')).toBeTruthy()
   })
 })

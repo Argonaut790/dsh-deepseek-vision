@@ -3,9 +3,9 @@
  */
 
 import type {
-  IApiClient, ModelCatalogFailure, ModelProviderGroup, ModelSelection, SettingsNamespaceView,
+  IApiClient, ModelCatalogFailure, ModelProviderGroup, ModelSelection,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import { SEE_IMAGE_MODEL_SETTINGS_NAME } from '../shared.ts'
+import { VISION_SELECTION_PATH } from '../shared.ts'
 import { createSnapshotStore, type SnapshotStore } from './store.ts'
 
 /** Global vision-picker snapshot. */
@@ -28,26 +28,57 @@ export interface VisionModelDirectoryState {
   error: string | null
 }
 
-/** Decode the current route from one Host settings view. */
-function selectionOf(view: SettingsNamespaceView): ModelSelection | null {
-  if (typeof view.value !== 'object' || view.value === null || Array.isArray(view.value)) return null
-  const value = view.value as { provider?: unknown; model?: unknown }
-  if (typeof value.provider !== 'string' || typeof value.model !== 'string') return null
-  return { provider: value.provider, model: value.model }
+export interface VisionSelectionView {
+  selection: unknown
+  writable: boolean
 }
 
-/** Keep only models whose exact route explicitly declares image input. */
-export function imageModelGroups(groups: readonly ModelProviderGroup[]): ModelProviderGroup[] {
-  return groups.flatMap((group) => {
-    // `inputModalities` is present on Harness builds carrying delegated-image
-    // admission. Keep the local structural extension so the plugin can still
-    // compile against older published API typings and degrade to an empty list.
-    const models = group.models.filter((model) => {
-      const candidate = model as typeof model & { inputModalities?: readonly string[] }
-      return candidate.inputModalities?.includes('image') === true
+export interface VisionSelectionClient {
+  describe(): Promise<VisionSelectionView>
+  select(selection: ModelSelection): Promise<VisionSelectionView>
+}
+
+async function selectionView(response: Response, action: string): Promise<VisionSelectionView> {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  if (!response.ok) {
+    const detail = typeof payload?.error === 'string' ? `: ${payload.error}` : ''
+    throw new Error(`${action} failed (HTTP ${String(response.status)})${detail}`)
+  }
+  if (payload === null || typeof (payload as VisionSelectionView).writable !== 'boolean') {
+    throw new Error(`${action} returned an invalid response`)
+  }
+  return payload as VisionSelectionView
+}
+
+const browserSelectionClient: VisionSelectionClient = {
+  async describe() {
+    const response = await fetch(VISION_SELECTION_PATH, { cache: 'no-store' })
+    return await selectionView(response, 'Vision settings')
+  },
+  async select(selection) {
+    const response = await fetch(VISION_SELECTION_PATH, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(selection),
     })
-    return models.length === 0 ? [] : [{ ...group, models }]
-  })
+    return await selectionView(response, 'Vision selection')
+  },
+}
+
+/** Decode the current route from one Host selection response. */
+function selectionOf(value: unknown): ModelSelection | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const candidate = value as { provider?: unknown; model?: unknown }
+  if (typeof candidate.provider !== 'string' || typeof candidate.model !== 'string') return null
+  return { provider: candidate.provider, model: candidate.model }
+}
+
+/** Keep every catalog model; some adapters omit modality metadata entirely. */
+export function imageModelGroups(groups: readonly ModelProviderGroup[]): ModelProviderGroup[] {
+  return groups.flatMap(group =>
+    group.models.length === 0 ? [] : [{ ...group, models: [...group.models] }],
+  )
 }
 
 /** Shared process-wide controller used by every composer vision chip. */
@@ -70,7 +101,10 @@ export class VisionModelDirectory {
   /**
    * @param api - loopback Host model-catalog and settings faces.
    */
-  constructor(private readonly api: Pick<IApiClient, 'llm' | 'settings'>) {}
+  constructor(
+    private readonly api: Pick<IApiClient, 'llm'>,
+    private readonly selectionClient: VisionSelectionClient = browserSelectionClient,
+  ) {}
 
   /**
    * Refresh the catalog and global selection together.
@@ -81,12 +115,12 @@ export class VisionModelDirectory {
     this.store.update((state) => { state.status = 'loading'; state.error = null })
     let responses: [
       Awaited<ReturnType<IApiClient['llm']['models']>>,
-      Awaited<ReturnType<IApiClient['settings']['describe']>>,
+      VisionSelectionView,
     ]
     try {
       responses = await Promise.all([
         this.api.llm.models({}),
-        this.api.settings.describe({}),
+        this.selectionClient.describe(),
       ])
     } catch (error) {
       if (!this.disposed && generation === this.generation) {
@@ -94,26 +128,20 @@ export class VisionModelDirectory {
       }
       return
     }
-    const [catalogResponse, settingsResponse] = responses
+    const [catalogResponse, selectionResponse] = responses
     if (this.disposed || generation !== this.generation) return
     if (!catalogResponse.result.ok) {
       this.fail(`llm.models failed: ${catalogResponse.result.error.code}: ${catalogResponse.result.error.message}`)
       return
     }
-    if (!settingsResponse.result.ok) {
-      this.fail(`settings.describe failed: ${settingsResponse.result.error.code}: ${settingsResponse.result.error.message}`)
-      return
-    }
     const catalog = catalogResponse.result.value
-    const settings = settingsResponse.result.value
-    const view = settings.namespaces.find(candidate => candidate.ns === SEE_IMAGE_MODEL_SETTINGS_NAME)
     this.store.update((state) => {
       state.groups = imageModelGroups(catalog.groups)
       state.failures = catalog.failures
-      state.available = view !== undefined
-      state.writable = settings.writable
-      state.revision = view?.revision
-      state.current = view === undefined ? null : selectionOf(view)
+      state.available = true
+      state.writable = selectionResponse.writable
+      state.revision = undefined
+      state.current = selectionOf(selectionResponse.selection)
       state.status = 'ready'
       state.error = null
     })
@@ -126,18 +154,10 @@ export class VisionModelDirectory {
    */
   async select(selection: ModelSelection): Promise<void> {
     const generation = ++this.generation
-    const revision = this.store.getSnapshot().revision
     this.store.update((state) => { state.status = 'selecting'; state.error = null })
-    let response: Awaited<ReturnType<IApiClient['settings']['mutate']>>
+    let response: VisionSelectionView
     try {
-      response = await this.api.settings.mutate({
-        ns: SEE_IMAGE_MODEL_SETTINGS_NAME,
-        ops: [
-          { op: 'set', path: ['provider'], value: selection.provider },
-          { op: 'set', path: ['model'], value: selection.model },
-        ],
-        ...(revision === undefined ? {} : { expectedRevision: revision }),
-      })
+      response = await this.selectionClient.select(selection)
     } catch (error) {
       if (!this.disposed && generation === this.generation) {
         this.fail(error instanceof Error ? error.message : String(error))
@@ -145,16 +165,11 @@ export class VisionModelDirectory {
       throw error
     }
     if (this.disposed || generation !== this.generation) return
-    if (!response.result.ok) {
-      const message = `${response.result.error.code}: ${response.result.error.message}`
-      this.fail(message)
-      throw new Error(`settings.mutate failed: ${message}`)
-    }
-    const view = response.result.value
     this.store.update((state) => {
-      state.current = selectionOf(view)
+      state.current = selectionOf(response.selection)
       state.available = true
-      state.revision = view.revision
+      state.writable = response.writable
+      state.revision = undefined
       state.status = 'ready'
       state.error = null
     })

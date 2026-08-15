@@ -29,7 +29,6 @@ interface Registration {
 
 function context() {
   const registrations: Registration[] = []
-  const resolveImage = vi.fn(async () => 'blob:authorized')
   const connection = {
     api: {
       llm: {
@@ -67,10 +66,10 @@ function context() {
     effect: (effect: () => unknown) => effect(),
     inject: (_services: readonly string[], callback: (scope: ClientContext) => unknown) =>
       callback(ctx as unknown as ClientContext),
-    get: (key: string) => key === 'connection' ? connection : { resolveImage },
+    get: (key: string) => key === 'connection' ? connection : {},
     on: vi.fn(() => () => {}),
   } as unknown as ClientContext
-  return { ctx, registrations, resolveImage }
+  return { ctx, registrations }
 }
 
 describe('client slot registration', () => {
@@ -119,7 +118,7 @@ describe('client slot registration', () => {
       width: 1,
       height: 1,
     }
-    await expect(injected.loadImage(attachment)).resolves.toBe('blob:authorized')
-    expect(b.resolveImage).toHaveBeenCalledWith('session-1', attachment)
+    await expect(injected.loadImage(attachment))
+      .resolves.toBe('/dsh-deepseek-vision/media/raw/session-1/image-1')
   })
 })

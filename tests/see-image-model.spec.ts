@@ -4,6 +4,8 @@ import { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import SeeImageModelConfig, {
   DEFAULT_SEE_IMAGE_MAX_TOKENS,
+  DEFAULT_SEE_IMAGE_MODEL,
+  DEFAULT_SEE_IMAGE_PROVIDER,
   SEE_IMAGE_MODEL_SETTINGS_NAMESPACE,
 } from '../src/index.ts'
 
@@ -32,12 +34,20 @@ async function boot() {
 }
 
 describe('SeeImageModelConfig', () => {
-  it('stays unselected until a complete route is stored', async () => {
+  it('defaults to Grok Latest and layers partial settings over it', async () => {
     const ctx = await boot()
-    expect(ctx.seeImageModel.currentSelection()).toBeUndefined()
+    expect(ctx.seeImageModel.currentSelection()).toEqual({
+      provider: DEFAULT_SEE_IMAGE_PROVIDER,
+      model: DEFAULT_SEE_IMAGE_MODEL,
+      maxTokens: DEFAULT_SEE_IMAGE_MAX_TOKENS,
+    })
 
     await ctx.settings.replace(SEE_IMAGE_MODEL_SETTINGS_NAMESPACE, { provider: 'vision' })
-    expect(ctx.seeImageModel.currentSelection()).toBeUndefined()
+    expect(ctx.seeImageModel.currentSelection()).toEqual({
+      provider: 'vision',
+      model: DEFAULT_SEE_IMAGE_MODEL,
+      maxTokens: DEFAULT_SEE_IMAGE_MAX_TOKENS,
+    })
     await ctx.fiber.dispose()
   })
 

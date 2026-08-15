@@ -28,6 +28,8 @@ export function VisionModelSelect(
     () => directory.getSnapshot(),
   )
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [provider, setProvider] = useState('')
   const [toast, setToast] = useState<{ seq: number; text: string } | null>(null)
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -58,6 +60,16 @@ export function VisionModelSelect(
     model: modelLabel ?? t('trigger.fallback'),
   })
   const busy = state.status === 'selecting'
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleGroups = state.groups.flatMap((group) => {
+    if (provider !== '' && group.id !== provider) return []
+    const models = normalizedQuery === ''
+      ? group.models
+      : group.models.filter(model =>
+          `${model.name} ${model.id}`.toLowerCase().includes(normalizedQuery),
+        )
+    return models.length === 0 ? [] : [{ ...group, models }]
+  })
 
   const reload = (): void => { load() }
   const choose = (selection: ModelSelection): void => {
@@ -99,12 +111,8 @@ export function VisionModelSelect(
         aria-expanded={open}
         aria-controls={open ? `${id}-vision-menu` : undefined}
         title={triggerLabel}
-        disabled={!state.writable || busy}
-        onClick={() => {
-          const next = !open
-          setOpen(next)
-          if (next) reload()
-        }}
+        disabled={state.available === true && (!state.writable || busy)}
+        onClick={() => { setOpen(value => !value) }}
       >
         <span className={classes.triggerLabel}>{triggerLabel}</span>
         <IconChevronDownOutline14
@@ -139,8 +147,29 @@ export function VisionModelSelect(
               </button>
             </div>
           ))}
+          <div className={classes.controls}>
+            <input
+              className={classes.search}
+              type="search"
+              value={query}
+              placeholder={t('search.placeholder')}
+              aria-label={t('search.aria')}
+              onChange={event => { setQuery(event.currentTarget.value) }}
+            />
+            <select
+              className={classes.provider}
+              value={provider}
+              aria-label={t('provider.aria')}
+              onChange={event => { setProvider(event.currentTarget.value) }}
+            >
+              <option value="">{t('provider.all')}</option>
+              {state.groups.map(group => (
+                <option value={group.id} key={group.id}>{group.name}</option>
+              ))}
+            </select>
+          </div>
           <div className={classNames(classes.groups, 'scrollable')}>
-            {state.groups.map((group) => {
+            {visibleGroups.map((group) => {
               const headingId = `${id}-vision-${group.id}`
               return (
                 <section role="group" aria-labelledby={headingId} className={classes.group} key={group.id}>
@@ -174,8 +203,10 @@ export function VisionModelSelect(
               )
             })}
           </div>
-          {state.status === 'ready' && state.groups.length === 0 && (
-            <div className={classes.empty}>{t('empty.models')}</div>
+          {state.status === 'ready' && visibleGroups.length === 0 && (
+            <div className={classes.empty}>
+              {state.groups.length === 0 ? t('empty.models') : t('empty.matches')}
+            </div>
           )}
         </div>
       )}

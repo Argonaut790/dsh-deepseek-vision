@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 describe('published bundle shape', () => {
@@ -11,7 +11,9 @@ describe('published bundle shape', () => {
   })
 
   it('emits the fixed see_image tool and structured readback contract', async () => {
-    const bundle = await readFile(new URL('../lib/tool.js', import.meta.url), 'utf8')
+    const directory = new URL('../lib/', import.meta.url)
+    const files = (await readdir(directory)).filter(file => file.endsWith('.js') && file !== 'client.js')
+    const bundle = (await Promise.all(files.map(file => readFile(new URL(file, directory), 'utf8')))).join('\n')
     expect(bundle).toContain('name: "see_image"')
     expect(bundle).toMatch(/required:\s*\[\s*"summary",\s*"ocr",\s*"answers",\s*"uncertainties"\s*\]/)
     expect(bundle).toMatch(

@@ -1,20 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { IApiClient, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { VisionModelDirectory } from '../src/client/vision-directory.ts'
 
-function settingsView(provider: string, model: string, revision: number): SettingsNamespaceView {
-  return {
-    ns: 'see-image-model',
-    schema: {},
-    value: { provider, model, maxTokens: 8192 },
-    applies: 'live',
-    secrets: [],
-    revision,
-  }
-}
-
 describe('VisionModelDirectory', () => {
-  it('filters image models and atomically writes the selected route', async () => {
+  it('lists every model and writes the selected route through the plugin endpoint', async () => {
     const models = vi.fn().mockResolvedValue({
       result: {
         ok: true,
@@ -32,70 +21,60 @@ describe('VisionModelDirectory', () => {
         },
       },
     })
-    const describeSettings = vi.fn().mockResolvedValue({
-      result: {
-        ok: true,
-        value: {
-          writable: true,
-          hasDocument: true,
-          namespaces: [settingsView('provider', 'vision', 7)],
-        },
-      },
+    const describe = vi.fn().mockResolvedValue({
+      writable: true,
+      selection: { provider: 'provider', model: 'vision', maxTokens: 8192 },
     })
-    const mutate = vi.fn().mockResolvedValue({
-      result: { ok: true, value: settingsView('other', 'other-vision', 8) },
+    const select = vi.fn().mockResolvedValue({
+      writable: true,
+      selection: { provider: 'other', model: 'other-vision', maxTokens: 8192 },
     })
-    const directory = new VisionModelDirectory({
-      llm: { models } as unknown as IApiClient['llm'],
-      settings: { describe: describeSettings, mutate } as unknown as IApiClient['settings'],
-    })
+    const directory = new VisionModelDirectory(
+      { llm: { models } as unknown as IApiClient['llm'] },
+      { describe, select },
+    )
 
     await directory.load()
     expect(directory.store.getSnapshot()).toMatchObject({
       current: { provider: 'provider', model: 'vision' },
       available: true,
       writable: true,
-      revision: 7,
       groups: [{
         id: 'provider',
-        models: [{ id: 'vision', name: 'Vision', inputModalities: ['text', 'image'] }],
+        models: [
+          { id: 'text', name: 'Text', inputModalities: ['text'] },
+          { id: 'vision', name: 'Vision', inputModalities: ['text', 'image'] },
+          { id: 'unknown', name: 'Unknown' },
+        ],
       }],
     })
 
     await directory.select({ provider: 'other', model: 'other-vision' })
-    expect(mutate).toHaveBeenCalledWith({
-      ns: 'see-image-model',
-      ops: [
-        { op: 'set', path: ['provider'], value: 'other' },
-        { op: 'set', path: ['model'], value: 'other-vision' },
-      ],
-      expectedRevision: 7,
-    })
+    expect(select).toHaveBeenCalledWith({ provider: 'other', model: 'other-vision' })
     expect(directory.store.getSnapshot()).toMatchObject({
       current: { provider: 'other', model: 'other-vision' },
-      revision: 8,
       status: 'ready',
     })
   })
 
-  it('hides the picker when the Host does not expose the settings service', async () => {
-    const directory = new VisionModelDirectory({
-      llm: {
+  it('reports an endpoint failure without publishing a stale selection', async () => {
+    const directory = new VisionModelDirectory(
+      { llm: {
         models: vi.fn().mockResolvedValue({
           result: { ok: true, value: { groups: [], failures: [] } },
         }),
-      } as unknown as IApiClient['llm'],
-      settings: {
-        describe: vi.fn().mockResolvedValue({
-          result: {
-            ok: true,
-            value: { writable: true, hasDocument: true, namespaces: [] },
-          },
-        }),
-      } as unknown as IApiClient['settings'],
-    })
+      } as unknown as IApiClient['llm'] },
+      {
+        describe: vi.fn().mockRejectedValue(new Error('endpoint unavailable')),
+        select: vi.fn(),
+      },
+    )
 
     await directory.load()
-    expect(directory.store.getSnapshot().available).toBe(false)
+    expect(directory.store.getSnapshot()).toMatchObject({
+      available: null,
+      status: 'error',
+      error: 'endpoint unavailable',
+    })
   })
 })

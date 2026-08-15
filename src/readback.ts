@@ -1,6 +1,7 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
+import { imageAttachmentNotes, parseImageAttachmentRef } from './media.ts'
 import {
   MAX_SEE_IMAGE_QUESTION_CHARS,
   MAX_SEE_IMAGE_QUESTIONS,
@@ -137,19 +138,33 @@ function eventContents(event: unknown): unknown[] {
   return contents
 }
 
-/** Collect delegated refs from one block array, including nested tool results. */
-function collectDelegatedImages(content: unknown, refs: ImageAttachmentRef[]): void {
+function isUserMessageEvent(event: unknown): boolean {
+  return typeof event === 'object' && event !== null && !Array.isArray(event)
+    && (event as { type?: unknown }).type === 'user/message'
+}
+
+/** Collect validated image refs from one user-message content array. */
+function collectUserImages(content: unknown, refs: ImageAttachmentRef[]): void {
   if (!Array.isArray(content)) return
   for (const value of content) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
-    const block = value as { type?: unknown; attachment?: unknown; content?: unknown }
-    if (block.type === 'delegated-image'
-      && typeof block.attachment === 'object'
-      && block.attachment !== null) {
-      refs.push(block.attachment as ImageAttachmentRef)
+    const block = value as { type?: unknown; attachment?: unknown; content?: unknown; text?: unknown }
+    if ((block.type === 'image' || block.type === 'delegated-image')
+      && typeof block.attachment === 'object' && block.attachment !== null) {
+      const ref = parseImageAttachmentRef(block.attachment)
+      if (ref !== undefined) refs.push(ref)
     }
-    if (block.type === 'tool-result') collectDelegatedImages(block.content, refs)
+    if (block.type === 'text' && typeof block.text === 'string') {
+      refs.push(...imageAttachmentNotes(block.text))
+    }
   }
+}
+
+function userImagesInEvent(event: unknown): ImageAttachmentRef[] {
+  if (!isUserMessageEvent(event)) return []
+  const refs: ImageAttachmentRef[] = []
+  for (const content of eventContents(event)) collectUserImages(content, refs)
+  return refs
 }
 
 /** Stable identity of one delegated attachment. */
@@ -165,23 +180,22 @@ function imageId(ref: ImageAttachmentRef): string | undefined {
  */
 export function latestDelegatedImages(events: readonly unknown[]): ImageAttachmentRef[] {
   for (let index = events.length - 1; index >= 0; index -= 1) {
-    const refs: ImageAttachmentRef[] = []
-    for (const content of eventContents(events[index])) collectDelegatedImages(content, refs)
+    const event = events[index]
+    const refs = userImagesInEvent(event)
     if (refs.length > 0) return refs
   }
   return []
 }
 
 /**
- * Build the conversation's delegated-image catalog in first-seen order.
+ * Build the conversation's user-authorized image catalog in first-seen order.
  * Repeated references to the same immutable attachment are represented once.
  */
-export function allDelegatedImages(events: readonly unknown[]): ImageAttachmentRef[] {
+export function authorizedUserImages(events: readonly unknown[]): ImageAttachmentRef[] {
   const refs: ImageAttachmentRef[] = []
   const seen = new Set<string>()
   for (const event of events) {
-    const eventRefs: ImageAttachmentRef[] = []
-    for (const content of eventContents(event)) collectDelegatedImages(content, eventRefs)
+    const eventRefs = userImagesInEvent(event)
     for (const ref of eventRefs) {
       const id = imageId(ref)
       if (id === undefined || seen.has(id)) continue
@@ -190,6 +204,11 @@ export function allDelegatedImages(events: readonly unknown[]): ImageAttachmentR
     }
   }
   return refs
+}
+
+/** Backward-compatible name for the user-authorized conversation image catalog. */
+export function allDelegatedImages(events: readonly unknown[]): ImageAttachmentRef[] {
+  return authorizedUserImages(events)
 }
 
 /** Explicit image-selection request after tool-argument normalization. */

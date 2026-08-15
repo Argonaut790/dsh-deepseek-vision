@@ -17,8 +17,9 @@ import { VisionModelSelect } from './VisionModelSelect.tsx'
 import type { EvidenceImageInjected, VisionModelSelectInjected } from './slots.ts'
 import { en, zh, type VisionKey } from './locales.ts'
 import { installStyles } from './styles.ts'
+import { installVisionSendHook } from './send-hook.ts'
 import { VisionModelDirectory } from './vision-directory.ts'
-import { SEE_IMAGE_MODEL_SETTINGS_NAME } from '../shared.ts'
+import { SEE_IMAGE_MODEL_SETTINGS_NAME, visionMediaRawPath } from '../shared.ts'
 
 export {
   evidenceFromResult, evidenceMeta, foldEvidenceNodes,
@@ -38,10 +39,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Copy for the global picker and conversation Evidence surfaces. */
     deepseekVision: VisionKey
   }
-}
-
-interface ConversationImageFace {
-  resolveImage: (sessionId: SessionId, attachment: ImageAttachmentRef) => Promise<string>
 }
 
 export const inject = ['locale', 'connection', 'conversation', 'slots', 'remote']
@@ -79,9 +76,14 @@ export function apply(ctx: ClientContext): void {
   }, 'dsh-deepseek-vision: global directory')
 
   ctx.inject(['slots'], (scope: ClientContext) => {
-    const conversation = scope.get('conversation') as unknown as ConversationImageFace
+    scope.effect(
+      () => installVisionSendHook(scope.get('conversation')),
+      'dsh-deepseek-vision: image send hook',
+    )
     const evidenceInject = (sessionId: SessionId): EvidenceImageInjected => ({
-      loadImage: attachment => conversation.resolveImage(sessionId, attachment),
+      loadImage: (attachment: ImageAttachmentRef) => Promise.resolve(
+        visionMediaRawPath(String(sessionId), String(attachment.attachmentId)),
+      ),
     })
     scope.slots.inject('tool.call.toolview', () => scope.slots.register({
       name: 'tool.call.toolview',

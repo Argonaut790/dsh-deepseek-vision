@@ -335,7 +335,8 @@ export function apply(ctx: Context, config: Config): void {
     order: SEE_IMAGE_SECTION_ORDER,
     text: context => disposeTool === undefined || ctx.tools.get('see_image', context.scope) === undefined
       ? ''
-      : 'When a user message includes a delegated image attachment, call `see_image` before making '
+      : 'When a user message includes a delegated image attachment or an `[image attachment {...}]` '
+        + 'note, call `see_image` before making '
         + 'claims about visual contents. Use `selection: "latest"` for the newest image message, `"all"` '
         + 'for the conversation image history, or `"ids"` with exact attachment ids. Combine questions '
         + 'for the current response into one call. Use only returned evidence as visual evidence and '
