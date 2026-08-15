@@ -33,6 +33,14 @@ handles image understanding and OCR.
 The global selector makes the active image-capable model visible and lets users
 change the visual-analysis route without changing the conversation model.
 
+### Evidence card in a conversation
+
+![Vision analysis reply with an evidence card in a DeepSeek Harness conversation](docs/images/dsh-vision-evidence-card.png)
+
+Each `see_image` call renders an evidence card with the structured summary,
+question answers, and any uncertainties, so the analysis stays reviewable in
+the conversation.
+
 <details>
 <summary>GitHub project overview</summary>
 
